@@ -3,7 +3,7 @@
 
 1. Install plugin
 ```bash
-npm install capacitor-callkit-voip
+npm i capacitor-plugin-callkit-voip
 ionic cap sync
 ```
 
