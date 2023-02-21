@@ -6,3 +6,4 @@
 CAP_PLUGIN(CallKitVoipPlugin, "CallKitVoip",
            CAP_PLUGIN_METHOD(register, CAPPluginReturnPromise);
 )
+

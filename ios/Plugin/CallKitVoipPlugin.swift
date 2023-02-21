@@ -5,7 +5,7 @@ import CallKit
 import PushKit
 
 /**
- *  CallKit Voip Plugin provides native PushKit functionality with apple CallKit to ionic capacitor
+ *  CallKit Voip Plugin provides native PushKit functionality with apple CallKit to capacitor
  */
 @objc(CallKitVoipPlugin)
 public class CallKitVoipPlugin: CAPPlugin {
@@ -15,48 +15,42 @@ public class CallKitVoipPlugin: CAPPlugin {
     private var connectionIdRegistry : [UUID: CallConfig] = [:]
 
     @objc func register(_ call: CAPPluginCall) {
-        // config PushKit
         voipRegistry.delegate = self
         voipRegistry.desiredPushTypes = [.voIP]
-
-        let config = CXProviderConfiguration(localizedName: "Ihorizon Call")
+        let config = CXProviderConfiguration(localizedName: "Secure Call")
         config.maximumCallGroups = 1
         config.maximumCallsPerCallGroup = 1
+        // Native call log shows video icon if it was video call.
         config.supportsVideo = true
-        config.supportedHandleTypes = [.generic, .phoneNumber]
-
+        // Support generic type to handle *User ID*
+        config.supportedHandleTypes = [.generic]
         provider = CXProvider(configuration: config)
         provider?.setDelegate(self, queue: DispatchQueue.main)
-
         call.resolve()
-    }
-
-    @objc func incomingCall(_ call: CAPPluginCall) {
-        // TODO
     }
 
     public func notifyEvent(eventName: String, uuid: UUID){
         if let config = connectionIdRegistry[uuid] {
             notifyListeners(eventName, data: [
-                "connectionId": config.connectionId,
-                "connectionType": config.connectionType,
-                "username"    : config.username
+                "id": config.id,
+                "media": config.media,
+                "name"    : config.name,
+                "duration"    : config.duration,
             ])
             connectionIdRegistry[uuid] = nil
         }
     }
 
-    public func startIncomingCall(connectionId: String, connectionType: String, username: String) {
+    public func incomingCall(id: String, media: String, name: String, duration: String) {
         let update                      = CXCallUpdate()
-        update.remoteHandle             = CXHandle(type: .generic, value: username)
-        update.hasVideo                 = connectionType == "video"
+        update.remoteHandle             = CXHandle(type: .generic, value: name)
+        update.hasVideo                 = media == "video"
         update.supportsDTMF             = false
         update.supportsHolding          = true
         update.supportsGrouping         = false
         update.supportsUngrouping       = false
-
         let uuid = UUID()
-        connectionIdRegistry[uuid] = .init(connectionId: connectionId, connectionType: connectionType, username: username)
+        connectionIdRegistry[uuid] = .init(id: id, media: media, name: name, duration: duration)
         self.provider?.reportNewIncomingCall(with: uuid, update: update, completion: { (_) in })
     }
 
@@ -65,9 +59,10 @@ public class CallKitVoipPlugin: CAPPlugin {
 
     public func endCall(uuid: UUID) {
         let controller = CXCallController()
-        let transaction = CXTransaction(action:
-                                            CXEndCallAction(call: uuid));controller.request(transaction,completion: { error in })
+        let transaction = CXTransaction(action: CXEndCallAction(call: uuid));controller.request(transaction,completion: { error in })
     }
+
+
 
 }
 
@@ -77,21 +72,24 @@ public class CallKitVoipPlugin: CAPPlugin {
 extension CallKitVoipPlugin: CXProviderDelegate {
 
     public func providerDidReset(_ provider: CXProvider) {
-        print("provider did reset")
+
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        print("call answered")
+        // Notify incoming call accepted
         notifyEvent(eventName: "callAnswered", uuid: action.callUUID)
-//        endCall(uuid: action.callUUID)
+        endCall(uuid: action.callUUID)
         action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        // End the call
+        notifyEvent(eventName: "callEnded", uuid: action.callUUID)
         action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        // Report connection started
         notifyEvent(eventName: "callStarted", uuid: action.callUUID)
         action.fulfill()
     }
@@ -103,17 +101,17 @@ extension CallKitVoipPlugin: PKPushRegistryDelegate {
     public func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
         let parts = pushCredentials.token.map { String(format: "%02.2hhx", $0) }
         let token = parts.joined()
-        notifyListeners("registration", data: ["token": token])
+        notifyListeners("registration", data: ["value": token])
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
-
-        guard let connectionId = payload.dictionaryPayload["ConnectionId"] as? String else {
-            return
-        }
-        let connectionType = (payload.dictionaryPayload["ConnectionType"] as? String) ?? "voice"
-        let username = (payload.dictionaryPayload["Username"] as? String) ?? "Unknown"
-        self.startIncomingCall(connectionId: connectionId, connectionType: connectionType, username: username)
+         guard let id = payload.dictionaryPayload["id"] as? String else {
+             return
+         }
+         let media = (payload.dictionaryPayload["media"] as? String) ?? "voice"
+         let name = (payload.dictionaryPayload["name"] as? String) ?? "Unknown"
+         let duration = (payload.dictionaryPayload["duration"] as? String) ?? "0"
+        self.incomingCall(id: id, media: media, name: name, duration: duration)
     }
 
 }
@@ -121,8 +119,9 @@ extension CallKitVoipPlugin: PKPushRegistryDelegate {
 
 extension CallKitVoipPlugin {
     struct CallConfig {
-        let connectionId   : String
-        let connectionType : String
-        let username       : String
+        let id: String
+        let media: String
+        let name: String
+        let duration: String
     }
 }

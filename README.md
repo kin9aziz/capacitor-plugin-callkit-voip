@@ -1,4 +1,4 @@
-# capacitor-callkit-voip
+# capacitor-plugin-callkit-voip
 ## Install
 
 1. Install plugin
@@ -33,23 +33,34 @@ openssl pkcs12 -in YOUR_CERTIFICATES.p12 -out app.pem -nodes -clcerts
 To make this plugin work, you need to call `.register()` method and then you can use API bellow.
 
 ```typescript
-import {CallKitVoip} from "capacitor-callkit-voip"
+import {CallKitVoip} from "capacitor-plugin-callkit-voip"
 
 
-async function registerVoipNotification(){
-    // register token 
-    CallKitVoip.addListener("registration", (data:Token) =>
-      console.log(`VOIP token has been received ${data.token}`)
-    );
-  
-    // start call
-    CallKitVoip.addListener("callAnswered", (call:CallData) => 
-      console.log(`Call has been received from ${call.username} (connectionId: ${call.connectionId}) (call Type: ${call.connectionType})`)
-    );
-    
-    // init plugin, start registration of VOIP notifications 
+async function registerCallKit(){
+
+  // Register plugin of VOIP notifications 
     await CallKitVoip.register(); // can be used with `.then()`
     console.log("Push notification has been registered")
+  
+    // Voip Token has been generated 
+    CallKitVoip.addListener("registration", (token:CallToken) =>
+      console.log(`VOIP token has been received ${token.value}`)
+    );
+  
+    // Notify Incoming Call Accepted
+    CallKitVoip.addListener("callAnswered", (data:CallData) => 
+      console.log(`Call has been received from ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
+    );
+
+    // Notify Call Ended
+    CallKitVoip.addListener("callEnded", (data:CallData) =>
+      console.log(`Call has been ended ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
+    );
+
+    // Notify Call Started
+    CallKitVoip.addListener("callStarted", (data:CallData) =>
+      console.log(`Call has been started with ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
+     );
   
 }
 ```
@@ -58,27 +69,29 @@ Once the plugin is installed, the only thing that you need to do is to push a VO
 
 ```json
 {
-    "Username"      : "Display Name",
-    "ConnectionId"  : "Unique Call ID",
-    "ConnectionType": "audio or video"
+    "name"         : "Display Name",
+    "id"           : "Unique Call ID",
+    "media"        : "Call Type: audio or video",
+    "duration"     : "Call duration"
 }
 ```
 
 You can use my script (bellow) to test it out:
-`./sendVoip.sh <connectionId> <deviceToken> <username>`
+`./sendVoip.sh <media> <id> <name> <duration> <token>`
 
 ### sendVoip.sh:
 ```shell
 #!/bin/bash
 
 function main {
-    connectionId=${1:?"connectionId should be specified"}
-    token=${2:?"Enter device token that you received on register listener"}
-    username=${3:-"Unknown"}
-    connectionType=${4:-"audio"}
+    media=${1:-"audio"}
+    id=${2:?"Caller ID should be specified"}
+    name=${3:-"Unknown"}
+    duration=${4:-0}
+    token=${5:?"Enter device token that you received on register listener"}
 
     curl -v \
-    -d "{\"aps\":{\"alert\":\"Incoming call\", \"content-available\":\"1\"}, \"Username\": \"${username}\", \"ConnectionType\": \"${connectionType}\", \"ConnectionId\": \"${connectionId}\"}" \
+    -d "{\"aps\":{\"alert\":\"Incoming call\", \"content-available\":\"1\"}, \"media\": \"${media}\", \"id\": \"${id}\", \"name\": \"${name}\", \"duration\": \"${duration}\", \"token\": \"${token}\"}" \
     -H "apns-topic: <YOUR_BUNDLE_ID>.voip" \
     -H "apns-push-type: voip" \
     -H "apns-priority: 10" \
@@ -107,6 +120,7 @@ If you will have some complication, feel free to write me email at [kin9aziz@gma
 * [`addListener("registration", handler)`](#addlistener)
 * [`addListener("callAnswered", handler)`](#addlistener)
 * [`addListener("callStarted", handler)`](#addlistener)
+* [`addListener("callEnded", handler)`](#addlistener)
 * [Interfaces](#interfaces)
 
 <!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
@@ -115,7 +129,7 @@ If you will have some complication, feel free to write me email at [kin9aziz@gma
 Register your device to receive VOIP push notifications.
 After registration it will call 'registration' listener (bellow) that returns VOIP token.
 ```typescript
-import {CallKitVoip} from "capacitor-callkit-voip"
+import {CallKitVoip} from "capacitor-plugin-callkit-voip"
 //...
 await CallKitVoip.register();
 // or
@@ -136,18 +150,18 @@ Adds listener on registration. When device will be registered to receiving VOIP 
 As usually, it's called after `.register()` function
 
 ```typescript
-import {CallKitVoip, Token} from "capacitor-callkit-voip"
+import { CallKitVoip, CallToken } from "capacitor-plugin-callkit-voip"
 //...
-CallKitVoip.addListener("registration", (data:Token) => {
+CallKitVoip.addListener("registration", (token:CallToken) => {
     // do something with token 
-    console.log(`VOIP token has been received ${data.token}`)
+    console.log(`VOIP token has been received ${token.value}`)
 });
 ```
 
 | Param              | Type                                                      |
 | ------------------ |-----------------------------------------------------------|
 | **`eventName`**    | <code>"registration"</code>                               |
-| **`listenerFunc`** | <code>(data: <a href="#data">Token</a>) =&gt; void</code> |
+| **`listenerFunc`** | <code>(data: <a href="#token">CallToken</a>) =&gt; void</code> |
 
 **Returns:** <code>any</code>
 
@@ -160,18 +174,18 @@ Adds listener to handle when user answers on call.
 
 
 ```typescript
-import {CallKitVoip, Token} from "capacitor-callkit-voip"
+import { CallKitVoip, CallData } from "capacitor-plugin-callkit-voip"
 //...
-CallKitVoip.addListener("callAnswered", (call:CallData) => {
-    // handle call (e.g. redirect it to specific page with call)
-    console.log(`Call has been received from ${call.username} (connectionId: ${call.connectionId}) (connectionType: ${call.connectionType})`)
+CallKitVoip.addListener("callAnswered", (data:CallData) => {
+  // handle call (e.g. redirect it to specific page with call)
+  console.log(`Call has been received from ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
 });
 ```
 
 | Param              | Type                                                         |
 | ------------------ |--------------------------------------------------------------|
 | **`eventName`**    | <code>"callAnswered"</code>                                  |
-| **`listenerFunc`** | <code>(call: <a href="#call">CallData</a>) =&gt; void</code> |
+| **`listenerFunc`** | <code>(call: <a href="#data">CallData</a>) =&gt; void</code> |
 
 **Returns:** <code>void</code>
 
@@ -180,21 +194,42 @@ CallKitVoip.addListener("callAnswered", (call:CallData) => {
 
 ### addListener("callStarted", handler)
 
-Adds listener to handle call starting. I am not sure if it's usable, because you can handle it directly in your app
+Adds listener to handle call starting, you can handle it directly in your app
 
 ```typescript
-import {CallKitVoip, Token} from "capacitor-callkit-voip"
+import { CallKitVoip, CallData } from "capacitor-plugin-callkit-voip"
 //...
-CallKitVoip.addListener("callStarted", (call:CallData) => {
-    // handle call (e.g. redirect it to specific page with call)
-    console.log(`Call has been started with ${call.username} (connectionId: ${call.connectionId}) (connectionType: ${call.connectionType})`)
+CallKitVoip.addListener("callAnswered", (data:CallData) => {
+  // handle call (e.g. redirect it to specific page with call)
+  console.log(`Call has been received from ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
 });
 ```
 
 | Param              | Type                                                         |
 | ------------------ |--------------------------------------------------------------|
 | **`eventName`**    | <code>"callStarted"</code>                                   |
-| **`listenerFunc`** | <code>(call: <a href="#call">CallData</a>) =&gt; void</code> |
+| **`listenerFunc`** | <code>(call: <a href="#data">CallData</a>) =&gt; void</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+### addListener("callEnded", handler)
+
+Adds listener to handle end call, you can handle it directly in your app
+
+```typescript
+import { CallKitVoip, CallData } from "capacitor-plugin-callkit-voip"
+//...
+CallKitVoip.addListener("callEnded", (data:CallData) => {
+        console.log(`Call has been ended ${call.name} (call ID: ${data.id}) (call Type: ${data.media}) (call duration: ${data.duration})`)
+});
+```
+
+| Param              | Type                                                         |
+| ------------------ |--------------------------------------------------------------|
+| **`eventName`**    | <code>"callStarted"</code>                                   |
+| **`listenerFunc`** | <code>(call: <a href="#data">CallData</a>) =&gt; void</code> |
 
 **Returns:** <code>any</code>
 
@@ -204,11 +239,11 @@ CallKitVoip.addListener("callStarted", (call:CallData) => {
 ### Interfaces
 
 
-#### Token
+#### CallToken
 
-| Prop       | Type                         |
-|------------|------------------------------|
-| **`data`** | <code>{token: string}</code> |
+| Prop        | Type                         |
+|-------------|------------------------------|
+| **`token`** | <code>{value: string}</code> |
 
 
 #### PluginListenerHandle
@@ -220,8 +255,10 @@ CallKitVoip.addListener("callStarted", (call:CallData) => {
 
 #### CallData
 
-| Prop                 | Type                |
-|----------------------| ------------------- |
-| **`connectionId`**   | <code>string</code> |
-| **`connectionType`** | <code>string</code> |
-| **`username`**       | <code>string</code> |
+| Prop           | Type                |
+|----------------|---------------------|
+| **`id`**       | <code>string</code> |
+| **`media`**    | <code>string</code> |
+| **`name`**     | <code>string</code> |
+| **`duration`** | <code>string</code> |
+
