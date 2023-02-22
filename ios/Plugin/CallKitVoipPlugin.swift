@@ -76,7 +76,8 @@ extension CallKitVoipPlugin: CXProviderDelegate {
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        // Notify incoming call accepted
+        // Answers an incoming call
+        print("CXAnswerCallAction answers an incoming call")
         notifyEvent(eventName: "callAnswered", uuid: action.callUUID)
         endCall(uuid: action.callUUID)
         action.fulfill()
@@ -84,15 +85,19 @@ extension CallKitVoipPlugin: CXProviderDelegate {
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         // End the call
+        print("CXEndCallAction represents ending call")
         notifyEvent(eventName: "callEnded", uuid: action.callUUID)
         action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         // Report connection started
+        print("CXStartCallAction represents initiating an outgoing call")
         notifyEvent(eventName: "callStarted", uuid: action.callUUID)
         action.fulfill()
     }
+
+
 }
 
 // MARK: PushKit events handler
@@ -101,16 +106,22 @@ extension CallKitVoipPlugin: PKPushRegistryDelegate {
     public func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
         let parts = pushCredentials.token.map { String(format: "%02.2hhx", $0) }
         let token = parts.joined()
+        print("Token: \(token)")
         notifyListeners("registration", data: ["value": token])
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
+         print("didReceiveIncomingPushWith")
          guard let id = payload.dictionaryPayload["id"] as? String else {
              return
          }
          let media = (payload.dictionaryPayload["media"] as? String) ?? "voice"
          let name = (payload.dictionaryPayload["name"] as? String) ?? "Unknown"
          let duration = (payload.dictionaryPayload["duration"] as? String) ?? "0"
+         print("id: \(id)")
+         print("name: \(name)")
+         print("media: \(media)")
+         print("duration: \(duration)")
         self.incomingCall(id: id, media: media, name: name, duration: duration)
     }
 
